@@ -1,0 +1,51 @@
+sort
+
+    ebutton = struct on | off;
+
+    state = struct running | frozen;
+
+
+act
+
+    cmd_send, cmd_receive: ebutton;
+
+    ebutton_press: state # ebutton;
+
+    freeze, unfreeze;
+
+
+proc
+
+    controller = Wait_press;
+
+
+    Wait_press =
+        (
+            ebutton_press(running, off) .
+            cmd_receive(off) .
+            cmd_send(off) .
+            freeze .
+            Wait_press
+        )
+        +
+        (
+            ebutton_press(frozen, on) .
+            cmd_receive(on) .
+            cmd_send(on) .
+            unfreeze .
+            Wait_press
+        );
+
+
+init
+
+    allow(
+        {
+            cmd_send,
+            cmd_receive,
+            ebutton_press,
+            freeze,
+            unfreeze
+        },
+        controller
+    );

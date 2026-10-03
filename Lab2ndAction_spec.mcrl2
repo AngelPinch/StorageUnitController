@@ -1,0 +1,87 @@
+sort
+    Axis = struct X | Y | Z;
+    Limit = struct maxPos | maxNeg;
+
+
+act
+    startCalibration;
+
+    cmd_send, cmd_receive, cmd_move: Axis # Limit;
+
+    controller_limit_reached: Axis # Limit;
+    actuator_limit_reached: Axis # Limit;
+
+    limit_reached: Axis # Limit;
+
+    store_max: Axis;
+    store_min: Axis;
+
+    calibration_complete;
+
+
+proc
+
+    Controller =
+        startCalibration .
+
+        % X axis
+        cmd_send(X, maxPos) .
+        controller_limit_reached(X, maxPos) .
+        store_max(X) .
+
+        cmd_send(X, maxNeg) .
+        controller_limit_reached(X, maxNeg) .
+        store_min(X) .
+
+        % Y axis
+        cmd_send(Y, maxPos) .
+        controller_limit_reached(Y, maxPos) .
+        store_max(Y) .
+
+        cmd_send(Y, maxNeg) .
+        controller_limit_reached(Y, maxNeg) .
+        store_min(Y) .
+
+        % Z axis
+        cmd_send(Z, maxPos) .
+        controller_limit_reached(Z, maxPos) .
+        store_max(Z) .
+
+        cmd_send(Z, maxNeg) .
+        controller_limit_reached(Z, maxNeg) .
+        store_min(Z) .
+
+        % Calibration finished
+        calibration_complete;
+
+
+    AxisActuator =
+        sum a: Axis, l: Limit .
+            cmd_receive(a, l) .
+            actuator_limit_reached(a, l) .
+            AxisActuator;
+
+
+init
+    allow(
+        {
+            startCalibration,
+            cmd_move,
+            limit_reached,
+            store_max,
+            store_min,
+            calibration_complete
+        },
+
+        comm(
+            {
+                cmd_send | cmd_receive -> cmd_move,
+
+                controller_limit_reached |
+                actuator_limit_reached ->
+                limit_reached
+            },
+
+            Controller || AxisActuator
+        )
+    );
