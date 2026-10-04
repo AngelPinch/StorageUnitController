@@ -1,0 +1,33 @@
+act
+    % Conveyor internal events
+    start_belt, move_belt;
+
+    %have receive and send values in order to have synced actions using c (where c stands for communication)
+    s_pick_up, r_pick_up, c_pick_up;
+    s_stop_belt, r_stop_belt, c_stop_belt;
+
+
+
+% Conveyor Belt Process using running variable in order to have the current state of running
+proc Conveyor(running: Bool) =
+      (running)  -> move_belt . Conveyor(true)
+    + (running)  -> s_pick_up . Conveyor(true)
+    + (running)  -> r_stop_belt . Conveyor(false)
+    + (!running) -> start_belt . Conveyor(true);
+
+% Controller Process
+% Waits for pick_up signal then shut down the conveyor movement
+proc Controller =
+    r_pick_up . s_stop_belt . Controller;
+
+init
+    allow(
+        {start_belt, move_belt, c_pick_up, c_stop_belt},
+        comm(
+            {
+                s_pick_up   | r_pick_up   -> c_pick_up,
+                s_stop_belt | r_stop_belt -> c_stop_belt
+            },
+            Conveyor(true) || Controller
+        )
+    );

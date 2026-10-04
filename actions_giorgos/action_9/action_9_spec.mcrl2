@@ -1,0 +1,38 @@
+%requirement 9 
+% The controller has to be able to adjust the grip strength depending on the fragility of the item
+
+%data types for item fragility levels
+sort Fragility = struct low | medium | high;
+
+act
+	detect_item: Fragility; %having a sensor in order to determine the fragility
+	set_grip: Nat;
+	
+	send_grip: Nat;
+	receive_grip: Nat;
+	communication_grip: Nat;
+
+%receive the grip command and upgrade the internal grip strength parameter
+proc Gripper(grip_power: Nat) =
+	sum g: Nat . receive_grip(g). Gripper(g);
+
+%levels of grip 
+% Too fragile -> soft grip (1)
+%not so fragile -> medium grip (2)
+%not fragile -> firm grip (3)
+
+proc Controller =
+	sum f: Fragility . detect_item(f) .
+		( (f == high) -> send_grip(1)
+			+(f == medium) ->send_grip(2)
+			+ (f == low) -> send_grip(3)
+		) . Controller;
+
+init
+	allow(
+		{detect_item, communication_grip},
+		comm(
+			{ send_grip | receive_grip -> communication_grip},
+			Gripper(3) || Controller 
+			)
+	);

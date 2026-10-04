@@ -1,0 +1,55 @@
+act 
+    % conveyor operations
+    start_belt, move_belt;
+    
+    % Robotic Arm operations
+    start_arm, move_arm;
+
+    % safety sensor event
+    detect_human;
+
+    % communication events
+    send_pick_up, receive_pick_up, communication_pick_up;
+    send_stop_belt, receive_stop_belt, communication_stop_belt;
+    send_stop_arm, receive_stop_arm, communication_stop_arm;
+    send_emergency_stop, receive_emergency_stop, communication_emergency_stop; % both arm and conveyor arm emergency stop
+
+proc Conveyor(running: Bool) = 
+      (running)  -> move_belt . Conveyor(true)
+    + (running)  -> send_pick_up . Conveyor(true)
+    + (running)  -> receive_stop_belt . Conveyor(false)      
+    + (running)  -> receive_emergency_stop . Conveyor(false)
+    + (!running) -> start_belt . Conveyor(true);
+
+proc RoboticArm(running: Bool) = 
+      (running)  -> move_arm . RoboticArm(true)                
+    + (running)  -> receive_stop_arm . RoboticArm(false)
+    + (running)  -> receive_emergency_stop . RoboticArm(false) 
+    + (!running) -> start_arm . RoboticArm(true);             
+
+proc Controller = 
+      receive_pick_up . send_stop_belt . send_stop_arm . Controller
+    + receive_emergency_stop . Controller;
+
+proc HumanDetector = 
+    detect_human . send_emergency_stop . HumanDetector;
+
+init 
+    allow(
+        { 
+            start_belt, move_belt,
+            start_arm, move_arm,
+            detect_human,
+            communication_pick_up, communication_stop_belt, 
+            communication_stop_arm, communication_emergency_stop
+        },
+        comm(
+            {
+                send_pick_up | receive_pick_up -> communication_pick_up, 
+                send_stop_belt | receive_stop_belt -> communication_stop_belt,
+                send_stop_arm  | receive_stop_arm -> communication_stop_arm,
+                send_emergency_stop | receive_emergency_stop | receive_emergency_stop -> communication_emergency_stop
+            },
+            Conveyor(true) || RoboticArm(true) || Controller || HumanDetector
+        )
+    );

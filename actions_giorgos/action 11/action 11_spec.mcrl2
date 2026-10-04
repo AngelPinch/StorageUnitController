@@ -1,0 +1,31 @@
+% Requirement 11
+% Switch to UPS during a mains power outage without interrupting the system
+
+sort PowerSource = struct mains | ups;
+
+act 
+    mains_failure, mains_restored;
+
+    operate_system;
+
+    send_switch_power: PowerSource;
+    receive_switch_power: PowerSource;
+    communication_switch_power: PowerSource; 
+
+% system remains running continuously not caring about which power source is active
+proc SystemCore(source: PowerSource) = 
+    operate_system . SystemCore(source)
+    + sum new_source: PowerSource . receive_switch_power(new_source) . SystemCore(new_source);
+
+proc PowerController =
+    mains_failure . send_switch_power(ups) . PowerController
+    + mains_restored . send_switch_power(mains) . PowerController;
+
+init
+    allow(
+        {mains_failure, mains_restored, operate_system, communication_switch_power},
+        comm(
+            { send_switch_power | receive_switch_power -> communication_switch_power },
+            SystemCore(mains) || PowerController
+        )
+    );
