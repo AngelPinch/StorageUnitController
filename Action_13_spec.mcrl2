@@ -1,0 +1,42 @@
+sort
+	
+	state = struct retrieval | storing;
+
+act
+	
+	button_press;
+	
+	cmd_receive, cmd_send: state;
+
+	change_state: state;
+	
+proc
+	
+	Controller = Wait_press;
+	
+	Wait_press = 
+		(button_press. 
+		cmd_receive(storing).
+		cmd_send(retrieval).
+		change_state(retrieval).
+		Wait_press)
+		+
+		(button_press.
+		cmd_receive(retrieval).
+		cmd_send(storing).
+		change_state(storing).
+		Wait_press);
+
+init
+
+    allow(
+        {
+            cmd_send,
+            cmd_receive,
+            button_press,
+			change_state
+        },
+        Controller
+    );
+
+		

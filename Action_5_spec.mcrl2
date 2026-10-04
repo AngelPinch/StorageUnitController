@@ -1,0 +1,65 @@
+% ================= ΕΠΕΞΗΓΗΣΗ =================%
+
+% Θεωρω οτι εχω 2 conveyor belts:
+% 1) μεταφερει items στο alaysis location
+% 2) μεταφερει items στο pickup point
+% εξου και στο sort εχω 2 conv_belt και 2 item_detect
+
+%ΤΙ ΚΑΝΩ ΑΝ ΔΕΝ ΕΧΕΙ ΚΟΘΝΗΘΕΙ ΤΟ CONVEYOR_BELT_P ΚΑΙ ΔΔΕΝ ΕΧΩ ΚΟΥΝΗΣΕΙ ΤΟ ΑΝΑΛ ITEM ΚΑΙ ΚΑΝΒ ΑΝΑΛ ΚΑΙ ΤΟ 2Ο? 
+
+sort
+
+	item_detection_a = struct a_yes | a_no;
+	item_detection_p = struct p_yes | p_no;
+	analysis_state = struct wait | begin | done;
+	conveyor_belt_a = struct a_move | a_stop;
+	conveyor_belt_p = struct p_move | p_stop;
+
+	
+act
+	
+	cmd_send: conveyor_belt_a # conveyor_belt_p # analysis_state;
+
+	cmd_receive: item_detection_a # item_detection_p # analysis_state ;
+
+proc
+
+	P5 =
+		cmd_receive(a_yes, p_no, wait).
+		cmd_send(a_stop, p_move, begin).
+		SP5_1
+		+
+		cmd_receive(a_yes, p_yes, wait).
+		cmd_send(a_stop, p_stop, begin).
+		SP5_2
+		+
+		cmd_receive(a_no, p_no, wait).
+		cmd_send(a_move, p_move, wait).
+		P5
+		+
+		cmd_receive(a_no, p_yes, wait).
+		cmd_send(a_move, p_stop, wait).
+		P5;
+		
+		
+	SP5_1 = 
+		cmd_receive(a_yes, p_no, done).
+		cmd_send(a_move, p_move, wait).
+		P5
+		+
+		cmd_receive(a_yes, p_yes, done).
+		cmd_send(a_move, p_stop, wait).
+		P5;
+
+	SP5_2 = 
+		cmd_receive(a_yes, p_yes, done).	
+		cmd_send(a_stop, p_stop, wait).
+		P5
+		+
+		cmd_receive(a_yes, p_no, done).
+		cmd_send(a_move, p_move, wait).
+		P5;
+
+init
+
+	P5;

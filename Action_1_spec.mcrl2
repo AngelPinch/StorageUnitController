@@ -1,0 +1,37 @@
+sort
+
+	item_detection_p = struct p_yes | p_no;
+	item_detection_s = struct s_yes | s_no;
+	item_detection_s_next = struct s_n_yes | s_n_no;
+	
+
+act
+	
+	store_item;
+	check_next;
+	cmd_receive: item_detection_p # item_detection_s;
+	cmd_send: item_detection_s_next;
+
+proc
+	
+	P1 = 
+		cmd_receive(p_yes, s_no).
+		store_item
+		+
+		cmd_receive(p_yes, s_yes).
+		SP1;
+		
+	SP1 = 
+		check_next.
+		cmd_receive(p_yes, s_yes).
+		cmd_send(s_n_no).
+		SP1
+		+
+		check_next.
+		cmd_receive(p_yes, s_no).
+		cmd_send(s_n_yes);
+		
+
+init
+	
+	P1;
