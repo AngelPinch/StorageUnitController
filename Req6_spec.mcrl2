@@ -1,0 +1,34 @@
+sort
+  Position = struct pos(x: Nat, y: Nat);
+  Item     = struct none | item(n: Nat);
+
+act
+  tick, ticks;
+  move: Position;
+  pick, place: Item;
+  backup, store_backup, bk: Position # Item # Nat;
+
+proc
+  Timer(t: Nat) =
+    (t < 3) -> tick . Timer(t + 1)
+            <> tick . Timer(0);
+
+  Storage =
+    sum p: Position, it: Item, v: Nat .
+      (x(p) < 3 && y(p) < 3 && (it == none || it == item(1)) && v < 4)
+        -> store_backup(p, it, v) . Storage;
+
+  Controller(p: Position, cur: Item, dbv: Nat) =
+      tick . backup(p, cur, dbv) . Controller(p, cur, (dbv + 1) mod 4)
+    + ( sum nx, ny: Nat .
+          ( nx < 3 && ny < 3 &&
+            ( (nx == x(p) + 1 && ny == y(p)) || (x(p) == nx + 1 && ny == y(p))
+           || (ny == y(p) + 1 && nx == x(p)) || (y(p) == ny + 1 && nx == x(p)) ) )
+          -> move(pos(nx, ny)) . Controller(pos(nx, ny), cur, dbv) )
+    + (cur == none) -> pick(item(1)) . Controller(p, item(1), dbv)
+    + (cur != none) -> place(cur)    . Controller(p, none, dbv);
+
+init
+  allow({ticks, move, pick, place, bk},
+    comm({tick | tick -> ticks, backup | store_backup -> bk},
+      Controller(pos(0, 0), none, 0) || Timer(0) || Storage));
