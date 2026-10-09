@@ -1,0 +1,67 @@
+
+sort
+    Level = struct L0 | L1 | L2 | L3;
+    Depth = struct front | back | buffer;
+    Position = struct pos(l: Level, d: Depth);
+    Item = struct none | item(n: Nat);
+
+act
+    cmd_send: Item # Position # Position;
+    cmd_receive: Item # Position # Position;
+    cmd_move: Item # Position # Position;
+
+    move_done: Position;
+    wait_move_done: Position;
+    movement_complete: Position;
+
+    retrieve: Item # Position;
+    restore: Item # Position;
+
+    cmd: Item # Position # Position;
+
+proc
+    Controller =
+        sum lev: Level .
+            cmd_send(
+                item(1),
+                pos(lev, front),
+                pos(lev, buffer)
+            ) .
+            wait_move_done(pos(lev, buffer)) .
+            Controller;
+
+    RobotArm =
+        sum lev: Level .
+            cmd_receive(
+                item(1),
+                pos(lev, front),
+                pos(lev, buffer)
+            ) .
+            cmd_move(
+                item(1),
+                pos(lev, front),
+                pos(lev, buffer)
+            ) .
+            move_done(pos(lev, buffer)) .
+            retrieve(
+                item(2),
+                pos(lev, back)
+            ) .
+            restore(
+                item(1),
+                pos(lev, buffer)
+            ) .
+            RobotArm;
+
+init
+    allow(
+        {cmd, cmd_move, movement_complete, retrieve, restore},
+        comm(
+            {
+                cmd_send | cmd_receive -> cmd,
+                move_done | wait_move_done -> movement_complete
+            },
+            Controller || RobotArm
+        )
+    );
+
