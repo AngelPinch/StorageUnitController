@@ -1,0 +1,217 @@
+sort
+    Fragility = struct low | medium | high;
+    Item = struct empty | item(id: Nat, fragility: Fragility);
+    PowerSource = struct mains | ups;
+    Zone2Position = struct entry | pickup;
+    Axis = struct axis_x | axis_y | axis_z;
+    Limit = struct max_pos | max_neg;
+    ButtonState = struct system_running | system_frozen;
+    ButtonValue = struct button_on | button_off;
+    OperatingMode = struct storing | retrieval;
+    P1Analysis = struct p1_yes | p1_no;
+    P1Sensor = struct s_yes | s_no;
+    P1NextSensor = struct next_yes | next_no;
+    P5Analysis = struct a_yes | a_no;
+    P5Pickup = struct p_yes | p_no;
+    P5State = struct waiting | beginning | finished;
+    P5Zone1 = struct a5_zone1_move | a5_zone1_stop;
+    P5Zone2 = struct a5_zone2_move | a5_zone2_stop;
+    BackupPosition = struct backup_pos(x: Nat, y: Nat);
+    ArmLevel = struct arm_l0 | arm_l1 | arm_l2 | arm_l3;
+    ArmDepth = struct arm_front | arm_back | arm_buffer;
+    ArmPosition = struct arm_position(level: ArmLevel, depth: ArmDepth);
+    ArmItem = struct arm_item(n: Nat);
+
+map
+    grip_for: Fragility -> Nat;
+
+eqn
+    grip_for(low) = 3;
+    grip_for(medium) = 2;
+    grip_for(high) = 1;
+
+act
+    item_arrives: Item;
+    detect_item: Fragility;
+
+    start_zone1, stop_zone1;
+    start_zone2, stop_zone2;
+    zone1_to_zone2: Item;
+    zone2_move: Item;
+
+    set_grip: Nat;
+    robot_pick: Item;
+    robot_move: Item;
+    movement_complete: Item;
+    robot_place: Item;
+    item_stored: Item;
+
+    detect_human;
+    emergency_stop;
+    emergency_reset;
+
+    mains_failure, mains_restored;
+    power_switched: PowerSource;
+
+    a1_store_item, a1_check_next;
+    a1_cmd_receive: P1Analysis # P1Sensor;
+    a1_cmd_send: P1NextSensor;
+
+    a5_cmd_send: P5Zone1 # P5Zone2 # P5State;
+    a5_cmd_receive: P5Analysis # P5Pickup # P5State;
+
+    start_calibration;
+    cal_cmd_send, cal_cmd_receive, cal_cmd_move: Axis # Limit;
+    cal_controller_limit, cal_actuator_limit, cal_limit: Axis # Limit;
+    cal_store_max, cal_store_min: Axis;
+    calibration_complete;
+
+    ebutton_press: ButtonState # ButtonValue;
+    ebutton_cmd_receive, ebutton_cmd_send: ButtonValue;
+    freeze_system, unfreeze_system;
+
+    mode_button_press;
+    mode_cmd_receive, mode_cmd_send, mode_changed: OperatingMode;
+
+    backup_tick;
+    backup_move: BackupPosition;
+    backup_pick, backup_place: Item;
+    backup_snapshot, backup_store_snapshot, backup_commit:
+        BackupPosition # Item # Nat;
+
+    arm_cmd_send, arm_cmd_receive, arm_cmd_move:
+        ArmItem # ArmPosition # ArmPosition;
+    arm_retrieve, arm_restore: ArmItem # ArmPosition;
+    arm_command: ArmItem # ArmPosition # ArmPosition;
+
+proc
+    % Requirement 1 (P1 Analysis)
+    P1Controller =
+        a1_cmd_receive(p1_yes, s_no) . a1_store_item . delta
+      + a1_cmd_receive(p1_yes, s_yes) . P1StoreNext;
+
+    P1StoreNext =
+        a1_check_next . a1_cmd_receive(p1_yes, s_no) . a1_cmd_send(next_yes) . delta;
+
+    % Requirement 5 (P5 Analysis)
+    P5Controller =
+        a5_cmd_receive(a_yes, p_no, waiting) .
+            a5_cmd_send(a5_zone1_stop, a5_zone2_move, beginning) . P5First;
+
+    P5First =
+        a5_cmd_receive(a_yes, p_no, finished) .
+            a5_cmd_send(a5_zone1_move, a5_zone2_move, waiting) . delta;
+
+    % Requirement 6 (Calibration sequence)
+    CalibrationController =
+        start_calibration .
+        cal_cmd_send(axis_x, max_pos) . cal_controller_limit(axis_x, max_pos) . cal_store_max(axis_x) .
+        cal_cmd_send(axis_x, max_neg) . cal_controller_limit(axis_x, max_neg) . cal_store_min(axis_x) .
+        calibration_complete . delta;
+
+    AxisActuator =
+        cal_cmd_receive(axis_x, max_pos) . cal_actuator_limit(axis_x, max_pos) .
+        cal_cmd_receive(axis_x, max_neg) . cal_actuator_limit(axis_x, max_neg) . AxisActuator;
+
+    % Requirement 7 (Emergency stop button)
+    EButtonController =
+        ebutton_press(system_running, button_off) .
+        ebutton_cmd_receive(button_off) .
+        ebutton_cmd_send(button_off) .
+        freeze_system . delta;
+
+    % Requirement 8 (Mode toggle)
+    ModeController =
+        mode_button_press .
+        mode_cmd_receive(storing) .
+        mode_cmd_send(retrieval) .
+        mode_changed(retrieval) . delta;
+
+    % Requirement 9 & 11 (Backup state snapshot & synchronization)
+    BackupMemory =
+        backup_store_snapshot(backup_pos(0, 0), item(1, medium), 0) . delta;
+
+    BackupController =
+        backup_tick . backup_tick .
+        backup_snapshot(backup_pos(0, 0), item(1, medium), 0) . delta;
+
+    % Requirement 10 (Robot arm transfer)
+    Lab10Controller =
+        arm_cmd_send(
+            arm_item(1),
+            arm_position(arm_l0, arm_front),
+            arm_position(arm_l0, arm_buffer)
+        ) . delta;
+
+    Lab10RobotArm =
+        arm_cmd_receive(
+            arm_item(1),
+            arm_position(arm_l0, arm_front),
+            arm_position(arm_l0, arm_buffer)
+        ) .
+        arm_cmd_move(
+            arm_item(1),
+            arm_position(arm_l0, arm_front),
+            arm_position(arm_l0, arm_buffer)
+        ) .
+        arm_retrieve(arm_item(2), arm_position(arm_l0, arm_back)) .
+        arm_restore(arm_item(1), arm_position(arm_l0, arm_buffer)) . delta;
+
+    % Requirements 2, 3, 4, 12, 13 (Plant: Items, Gripper, Safety, Power Switching)
+    Plant =
+        item_arrives(item(1, low)) .
+        detect_item(low) .
+        zone1_to_zone2(item(1, low)) .
+        zone2_move(item(1, low)) .
+        set_grip(3) .
+        robot_pick(item(1, low)) .
+        robot_move(item(1, low)) .
+        movement_complete(item(1, low)) .
+        robot_place(item(1, low)) .
+        item_stored(item(1, low)) .
+        mains_failure .
+        power_switched(ups) .
+        detect_human .
+        emergency_stop .
+        emergency_reset . delta;
+
+init
+    allow(
+        {
+            item_arrives, detect_item,
+            start_zone1, stop_zone1, start_zone2, stop_zone2,
+            zone1_to_zone2, zone2_move,
+            set_grip, robot_pick, robot_move, movement_complete,
+            robot_place, item_stored,
+            detect_human, emergency_stop, emergency_reset,
+            mains_failure, mains_restored, power_switched,
+            a1_store_item, a1_check_next, a1_cmd_receive, a1_cmd_send,
+            a5_cmd_send, a5_cmd_receive,
+            start_calibration, cal_cmd_move, cal_limit,
+            cal_store_max, cal_store_min, calibration_complete,
+            ebutton_press, ebutton_cmd_receive, ebutton_cmd_send,
+            freeze_system, unfreeze_system,
+            mode_button_press, mode_cmd_receive, mode_cmd_send, mode_changed,
+            backup_tick, backup_move, backup_pick, backup_place, backup_commit,
+            arm_command, arm_cmd_move, arm_retrieve, arm_restore
+        },
+        comm(
+            {
+                cal_cmd_send | cal_cmd_receive -> cal_cmd_move,
+                cal_controller_limit | cal_actuator_limit -> cal_limit,
+                backup_snapshot | backup_store_snapshot -> backup_commit,
+                arm_cmd_send | arm_cmd_receive -> arm_command
+            },
+            Plant
+            || P1Controller
+            || P5Controller
+            || CalibrationController
+            || AxisActuator
+            || EButtonController
+            || ModeController
+            || BackupController
+            || BackupMemory
+            || Lab10Controller
+            || Lab10RobotArm
+        ) 
+    );
