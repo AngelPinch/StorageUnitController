@@ -1,0 +1,1 @@
+[true* . item_arrives]([!(emergency_button ||human_detected || conveyor_cmd_move(conveyor_stop_cmd))] false)

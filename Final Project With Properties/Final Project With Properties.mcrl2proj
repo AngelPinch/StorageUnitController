@@ -1,0 +1,14 @@
+<root>
+ <spec>Final Project With Properties_spec.mcrl2</spec>
+ <properties>
+  <property>Deadlock_Check</property>
+  <property>R3 Only_Reset_Available_After_EB_Press</property>
+  <property>R3 EB_Available_At_Every_State</property>
+  <property>R4 After_Item_Arrives_Only_ER_CBStop_HD_Can_Happen</property>
+  <property>R1 After_Pick_Place_Must_Happen_Before_New_Pick</property>
+  <property>R5 Pick_Can_Only_Happen_If_Place_Has_Happened</property>
+ </properties>
+ <jittyc>false</jittyc>
+ <linearisation_method>regular</linearisation_method>
+ <enumeration_limit>0</enumeration_limit>
+</root>

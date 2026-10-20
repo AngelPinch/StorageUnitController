@@ -1,0 +1,15 @@
+(
+  [(!arm_cmd_move(place_at(pos(1,0,0))))* .
+    arm_cmd_move(pick_at(pos(1,0,0)))] false
+)
+&&
+(
+  [(!arm_cmd_move(place_at(pos(0,0,0))))* .
+    arm_cmd_move(pick_at(pos(0,0,0)))] false
+)
+&&
+(
+  [(!arm_cmd_move(place_at(pos(-1,0,0))))* .
+    arm_cmd_move(pick_at(pos(-1,0,0)))] false
+)
+
