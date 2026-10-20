@@ -1,0 +1,1 @@
+[true*]([item_arrives] [!conveyor_cmd_move(conveyor_stop_cmd)] [!arm_cmd_move(pick_at(pickup_position))] false)

@@ -1,0 +1,698 @@
+sort
+  Position = struct pos(x: Int, y: Int, z: Int);
+  Item = struct no_item | item;
+  Mode = struct sorting | retrieval;
+  Slot = struct slot0 | slot1 | slot2;
+  Phase = struct
+    startup
+    | normal_operation
+    | need_calibration
+    | calibrating
+    | returning_home
+    | pickup_stop_phase
+    | move_to_pickup_phase
+    | pickup_item_phase
+    | pickup_start_phase
+    | choose_storage
+    | deliver_item_phase
+    | release_item_phase
+    | storage_full_stop_phase
+    | storage_full_wait
+    | emergency_stopped
+    | safety_stopped
+    | safety_clear;
+  ComponentState = struct
+    component_active
+    | component_emergency_stopped
+    | component_safety_stopped
+    | component_safety_clear
+    | component_calibrating;
+  Command = struct
+    move_to(destination: Position)
+    | calibrate_cmd
+    | pick_at(location: Position)
+    | place_at(location: Position)
+    | release_cmd
+    | conveyor_stop_cmd
+    | conveyor_start_cmd;
+map
+  home_position: Position;
+  pickup_position: Position;
+  retrieval_position: Position;
+  slot_position: Slot -> Position;
+eqn
+  home_position = pos(0, 0, 0);
+  pickup_position = pos(-2, 0, 0);
+  retrieval_position = pos(2, 0, 0);
+  slot_position(slot0) = pos(-1, 0, 0);
+  slot_position(slot1) = pos(0, 0, 0);
+  slot_position(slot2) = pos(1, 0, 0);
+act
+  arm_cmd_send: Command;
+  conveyor_cmd_send: Command;
+  arm_cmd_receive: Command;
+  conveyor_cmd_receive: Command;
+  arm_cmd_move: Command;
+  conveyor_cmd_move: Command;
+  cal_done_send;
+  cal_done_receive;
+  calibration_done;
+  emergency_request;
+  emergency_receive;
+  conveyor_emergency_receive;
+  emergency_button;
+  human_request;
+  human_receive;
+  conveyor_human_receive;
+  human_detected;
+  human_clear_request;
+  human_clear_receive;
+  conveyor_human_clear_receive;
+  human_cleared;
+  reset_request;
+  reset_receive;
+  conveyor_reset_receive;
+  reset;
+  resume_request;
+  resume_receive;
+  conveyor_resume_receive;
+  resume;
+  item_arrives;
+  switch_mode: Mode;
+proc
+  Controller(
+    p: Position,
+    held: Item,
+    s0: Item,
+    s1: Item,
+    s2: Item,
+    mode: Mode,
+    phase: Phase,
+    incoming: Bool,
+    target: Slot
+  ) =
+    (phase != emergency_stopped) ->
+      emergency_request .
+        Controller(
+          p, held, s0, s1, s2,
+          mode, emergency_stopped, incoming, target
+        )
+    +
+    (phase != calibrating
+      && phase != emergency_stopped
+      && phase != safety_stopped) ->
+      human_request .
+        Controller(
+          p, held, s0, s1, s2,
+          mode, safety_stopped, incoming, target
+        )
+    +
+    (phase == emergency_stopped) ->
+      reset_request .
+        Controller(
+          p, held, s0, s1, s2,
+          mode, returning_home, incoming, target
+        )
+    +
+    (phase == safety_stopped) ->
+      human_clear_request .
+        Controller(
+          p, held, s0, s1, s2,
+          mode, safety_clear, incoming, target
+        )
+    +
+    (phase == safety_clear) ->
+      resume_request .
+        Controller(
+          p, held, s0, s1, s2,
+          mode, returning_home, incoming, target
+        )
+    +
+    (phase == startup && p != home_position) ->
+      arm_cmd_send(move_to(home_position)) .
+        Controller(
+          home_position, held, s0, s1, s2,
+          mode, need_calibration, incoming, target
+        )
+    +
+    (phase == startup && p == home_position) ->
+      arm_cmd_send(calibrate_cmd) .
+        Controller(
+          home_position, held, s0, s1, s2,
+          mode, calibrating, incoming, target
+        )
+    +
+    (phase == returning_home && p != home_position) ->
+      arm_cmd_send(move_to(home_position)) .
+        Controller(
+          home_position, held, s0, s1, s2,
+          mode, need_calibration, incoming, target
+        )
+    +
+    (phase == returning_home && p == home_position) ->
+      arm_cmd_send(calibrate_cmd) .
+        Controller(
+          home_position, held, s0, s1, s2,
+          mode, calibrating, incoming, target
+        )
+    +
+    (phase == need_calibration) ->
+      arm_cmd_send(calibrate_cmd) .
+        Controller(
+          home_position, held, s0, s1, s2,
+          mode, calibrating, incoming, target
+        )
+    +
+    (phase == calibrating && held == no_item) ->
+      cal_done_receive .
+        Controller(
+          home_position, held, s0, s1, s2,
+          mode, normal_operation, incoming, target
+        )
+    +
+    (phase == calibrating
+      && held == item
+      && mode == sorting) ->
+      cal_done_receive .
+        Controller(
+          home_position, held, s0, s1, s2,
+          mode, choose_storage, incoming, target
+        )
+    +
+    (phase == calibrating
+      && held == item
+      && mode == retrieval) ->
+      cal_done_receive .
+        Controller(
+          home_position, held, s0, s1, s2,
+          mode, deliver_item_phase, incoming, target
+        )
+    +
+    (phase == normal_operation
+      && held == no_item
+      && !incoming
+      && mode != sorting) ->
+      switch_mode(sorting) .
+        Controller(
+          p, held, s0, s1, s2,
+          sorting, normal_operation, incoming, target
+        )
+    +
+    (phase == normal_operation
+      && held == no_item
+      && !incoming
+      && mode != retrieval) ->
+      switch_mode(retrieval) .
+        Controller(
+          p, held, s0, s1, s2,
+          retrieval, normal_operation, incoming, target
+        )
+    +
+    (phase == normal_operation
+      && mode == sorting
+      && held == no_item
+      && !incoming
+      && (s0 == no_item || s1 == no_item || s2 == no_item)) ->
+      item_arrives .
+        Controller(
+          p, held, s0, s1, s2,
+          mode, pickup_stop_phase, true, target
+        )
+    +
+    (phase == normal_operation
+      && mode == sorting
+      && held == no_item
+      && !incoming
+      && s0 == item
+      && s1 == item
+      && s2 == item) ->
+      item_arrives .
+        Controller(
+          p, held, s0, s1, s2,
+          mode, storage_full_stop_phase, true, target
+        )
+    +
+    (phase == storage_full_stop_phase && incoming) ->
+      conveyor_cmd_send(conveyor_stop_cmd) .
+        Controller(
+          p, held, s0, s1, s2,
+          mode, storage_full_wait, incoming, target
+        )
+    +
+    (phase == storage_full_wait
+      && mode == sorting
+      && incoming) ->
+      switch_mode(retrieval) .
+        Controller(
+          p, held, s0, s1, s2,
+          retrieval, normal_operation, incoming, target
+        )
+    +
+    (phase == pickup_stop_phase
+      && incoming) ->
+      conveyor_cmd_send(conveyor_stop_cmd) .
+        Controller(
+          p, held, s0, s1, s2,
+          mode, move_to_pickup_phase, incoming, target
+        )
+    +
+    (phase == move_to_pickup_phase
+      && incoming
+      && p != pickup_position) ->
+      arm_cmd_send(move_to(pickup_position)) .
+        Controller(
+          pickup_position, held, s0, s1, s2,
+          mode, pickup_item_phase, incoming, target
+        )
+    +
+    (phase == pickup_item_phase
+      && incoming
+      && p == pickup_position
+      && held == no_item) ->
+      arm_cmd_send(pick_at(pickup_position)) .
+        Controller(
+          p, item, s0, s1, s2,
+          mode, pickup_start_phase, false, target
+        )
+    +
+    (phase == pickup_start_phase) ->
+      conveyor_cmd_send(conveyor_start_cmd) .
+        Controller(
+          p, held, s0, s1, s2,
+          mode, choose_storage, incoming, target
+        )
+    +
+    (phase == choose_storage
+      && mode == sorting
+      && held == item
+      && s0 == no_item
+      && p != slot_position(slot0)) ->
+      arm_cmd_send(move_to(slot_position(slot0))) .
+        Controller(
+          slot_position(slot0), held, s0, s1, s2,
+          mode, choose_storage, incoming, slot0
+        )
+    +
+    (phase == choose_storage
+      && mode == sorting
+      && held == item
+      && s0 == no_item
+      && p == slot_position(slot0)) ->
+      arm_cmd_send(place_at(slot_position(slot0))) .
+        Controller(
+          p, no_item, item, s1, s2,
+          mode, normal_operation, incoming, slot0
+        )
+    +
+    (phase == choose_storage
+      && mode == sorting
+      && held == item
+      && s1 == no_item
+      && p != slot_position(slot1)) ->
+      arm_cmd_send(move_to(slot_position(slot1))) .
+        Controller(
+          slot_position(slot1), held, s0, s1, s2,
+          mode, choose_storage, incoming, slot1
+        )
+    +
+    (phase == choose_storage
+      && mode == sorting
+      && held == item
+      && s1 == no_item
+      && p == slot_position(slot1)) ->
+      arm_cmd_send(place_at(slot_position(slot1))) .
+        Controller(
+          p, no_item, s0, item, s2,
+          mode, normal_operation, incoming, slot1
+        )
+    +
+    (phase == choose_storage
+      && mode == sorting
+      && held == item
+      && s2 == no_item
+      && p != slot_position(slot2)) ->
+      arm_cmd_send(move_to(slot_position(slot2))) .
+        Controller(
+          slot_position(slot2), held, s0, s1, s2,
+          mode, choose_storage, incoming, slot2
+        )
+    +
+    (phase == choose_storage
+      && mode == sorting
+      && held == item
+      && s2 == no_item
+      && p == slot_position(slot2)) ->
+      arm_cmd_send(place_at(slot_position(slot2))) .
+        Controller(
+          p, no_item, s0, s1, item,
+          mode, normal_operation, incoming, slot2
+        )
+    +
+    (phase == normal_operation
+      && mode == retrieval
+      && held == no_item
+      && s0 == item
+      && p != slot_position(slot0)) ->
+      arm_cmd_send(move_to(slot_position(slot0))) .
+        Controller(
+          slot_position(slot0), held, s0, s1, s2,
+          mode, normal_operation, incoming, slot0
+        )
+    +
+    (phase == normal_operation
+      && mode == retrieval
+      && held == no_item
+      && s0 == item
+      && p == slot_position(slot0)) ->
+      arm_cmd_send(pick_at(slot_position(slot0))) .
+        Controller(
+          p, item, no_item, s1, s2,
+          mode, deliver_item_phase, incoming, slot0
+        )
+    +
+    (phase == normal_operation
+      && mode == retrieval
+      && held == no_item
+      && s1 == item
+      && p != slot_position(slot1)) ->
+      arm_cmd_send(move_to(slot_position(slot1))) .
+        Controller(
+          slot_position(slot1), held, s0, s1, s2,
+          mode, normal_operation, incoming, slot1
+        )
+    +
+    (phase == normal_operation
+      && mode == retrieval
+      && held == no_item
+      && s1 == item
+      && p == slot_position(slot1)) ->
+      arm_cmd_send(pick_at(slot_position(slot1))) .
+        Controller(
+          p, item, s0, no_item, s2,
+          mode, deliver_item_phase, incoming, slot1
+        )
+    +
+    (phase == normal_operation
+      && mode == retrieval
+      && held == no_item
+      && s2 == item
+      && p != slot_position(slot2)) ->
+      arm_cmd_send(move_to(slot_position(slot2))) .
+        Controller(
+          slot_position(slot2), held, s0, s1, s2,
+          mode, normal_operation, incoming, slot2
+        )
+    +
+    (phase == normal_operation
+      && mode == retrieval
+      && held == no_item
+      && s2 == item
+      && p == slot_position(slot2)) ->
+      arm_cmd_send(pick_at(slot_position(slot2))) .
+        Controller(
+          p, item, s0, s1, no_item,
+          mode, deliver_item_phase, incoming, slot2
+        )
+    +
+    (phase == deliver_item_phase
+      && mode == retrieval
+      && held == item
+      && p != retrieval_position) ->
+      arm_cmd_send(move_to(retrieval_position)) .
+        Controller(
+          retrieval_position, held, s0, s1, s2,
+          mode, deliver_item_phase, incoming, target
+        )
+    +
+    (phase == deliver_item_phase
+      && mode == retrieval
+      && held == item
+      && p == retrieval_position) ->
+      arm_cmd_send(release_cmd) .
+        Controller(
+          p, no_item, s0, s1, s2,
+          mode, normal_operation, incoming, target
+        );
+  Arm(
+    p: Position,
+    holding: Bool,
+    calibrated: Bool,
+    state: ComponentState
+  ) =
+    (state == component_active
+      || state == component_safety_stopped
+      || state == component_safety_clear) ->
+      emergency_receive .
+        Arm(
+          p, holding, false, component_emergency_stopped
+        )
+    +
+    (state == component_active
+      || state == component_safety_clear) ->
+      human_receive .
+        Arm(
+          p, holding, false, component_safety_stopped
+        )
+    +
+    (state == component_active) ->
+      arm_cmd_receive(move_to(home_position)) .
+        Arm(
+          home_position, holding, calibrated, component_active
+        )
+    +
+    (state == component_active && calibrated) ->
+      arm_cmd_receive(move_to(pickup_position)) .
+        Arm(
+          pickup_position, holding, calibrated, component_active
+        )
+    +
+    (state == component_active && calibrated) ->
+      arm_cmd_receive(move_to(retrieval_position)) .
+        Arm(
+          retrieval_position, holding, calibrated, component_active
+        )
+    +
+    (state == component_active && calibrated) ->
+      arm_cmd_receive(move_to(slot_position(slot0))) .
+        Arm(
+          slot_position(slot0), holding, calibrated, component_active
+        )
+    +
+    (state == component_active && calibrated) ->
+      arm_cmd_receive(move_to(slot_position(slot1))) .
+        Arm(
+          slot_position(slot1), holding, calibrated, component_active
+        )
+    +
+    (state == component_active && calibrated) ->
+      arm_cmd_receive(move_to(slot_position(slot2))) .
+        Arm(
+          slot_position(slot2), holding, calibrated, component_active
+        )
+    +
+    (state == component_active && p == home_position) ->
+      arm_cmd_receive(calibrate_cmd) .
+        Arm(
+          p, holding, false, component_calibrating
+        )
+    +
+    (state == component_active
+      && calibrated
+      && p == pickup_position
+      && !holding) ->
+      arm_cmd_receive(pick_at(pickup_position)) .
+        Arm(
+          p, true, calibrated, component_active
+        )
+    +
+    (state == component_active
+      && calibrated
+      && p == slot_position(slot0)
+      && !holding) ->
+      arm_cmd_receive(pick_at(slot_position(slot0))) .
+        Arm(
+          p, true, calibrated, component_active
+        )
+    +
+    (state == component_active
+      && calibrated
+      && p == slot_position(slot1)
+      && !holding) ->
+      arm_cmd_receive(pick_at(slot_position(slot1))) .
+        Arm(
+          p, true, calibrated, component_active
+        )
+    +
+    (state == component_active
+      && calibrated
+      && p == slot_position(slot2)
+      && !holding) ->
+      arm_cmd_receive(pick_at(slot_position(slot2))) .
+        Arm(
+          p, true, calibrated, component_active
+        )
+    +
+    (state == component_active
+      && calibrated
+      && p == slot_position(slot0)
+      && holding) ->
+      arm_cmd_receive(place_at(slot_position(slot0))) .
+        Arm(
+          p, false, calibrated, component_active
+        )
+    +
+    (state == component_active
+      && calibrated
+      && p == slot_position(slot1)
+      && holding) ->
+      arm_cmd_receive(place_at(slot_position(slot1))) .
+        Arm(
+          p, false, calibrated, component_active
+        )
+    +
+    (state == component_active
+      && calibrated
+      && p == slot_position(slot2)
+      && holding) ->
+      arm_cmd_receive(place_at(slot_position(slot2))) .
+        Arm(
+          p, false, calibrated, component_active
+        )
+    +
+    (state == component_active
+      && calibrated
+      && p == retrieval_position
+      && holding) ->
+      arm_cmd_receive(release_cmd) .
+        Arm(
+          p, false, calibrated, component_active
+        )
+    +
+    (state == component_calibrating) ->
+      cal_done_send .
+        Arm(
+          home_position, holding, true, component_active
+        )
+    +
+    (state == component_calibrating) ->
+      emergency_receive .
+        Arm(
+          p, holding, false, component_emergency_stopped
+        )
+    +
+    (state == component_emergency_stopped) ->
+      reset_receive .
+        Arm(
+          p, holding, false, component_active
+        )
+    +
+    (state == component_safety_stopped) ->
+      human_clear_receive .
+        Arm(
+          p, holding, false, component_safety_clear
+        )
+    +
+    (state == component_safety_clear) ->
+      resume_receive .
+        Arm(
+          p, holding, false, component_active
+        );
+  Conveyor(
+    running: Bool,
+    state: ComponentState
+  ) =
+    (state == component_active
+      || state == component_safety_stopped
+      || state == component_safety_clear) ->
+      conveyor_emergency_receive .
+        Conveyor(false, component_emergency_stopped)
+    +
+    (state == component_active
+      || state == component_safety_clear) ->
+      conveyor_human_receive .
+        Conveyor(false, component_safety_stopped)
+    +
+    (state == component_active) ->
+      conveyor_cmd_receive(conveyor_stop_cmd) .
+        Conveyor(false, component_active)
+    +
+    (state == component_active) ->
+      conveyor_cmd_receive(conveyor_start_cmd) .
+        Conveyor(true, component_active)
+    +
+    (state == component_emergency_stopped) ->
+      conveyor_reset_receive .
+        Conveyor(false, component_active)
+    +
+    (state == component_safety_stopped) ->
+      conveyor_human_clear_receive .
+        Conveyor(false, component_safety_clear)
+    +
+    (state == component_safety_clear) ->
+      conveyor_resume_receive .
+        Conveyor(false, component_active);
+init
+  allow(
+    {
+      arm_cmd_move,
+      conveyor_cmd_move,
+      calibration_done,
+      emergency_button,
+      human_detected,
+      human_cleared,
+      reset,
+      resume,
+      item_arrives,
+      switch_mode
+    },
+    comm(
+      {
+        arm_cmd_send | arm_cmd_receive -> arm_cmd_move,
+        conveyor_cmd_send | conveyor_cmd_receive -> conveyor_cmd_move,
+        cal_done_send | cal_done_receive -> calibration_done,
+        emergency_request
+          | emergency_receive
+          | conveyor_emergency_receive
+          -> emergency_button,
+        human_request
+          | human_receive
+          | conveyor_human_receive
+          -> human_detected,
+        human_clear_request
+          | human_clear_receive
+          | conveyor_human_clear_receive
+          -> human_cleared,
+        reset_request
+          | reset_receive
+          | conveyor_reset_receive
+          -> reset,
+        resume_request
+          | resume_receive
+          | conveyor_resume_receive
+          -> resume
+      },
+      Controller(
+        home_position,
+        no_item,
+        no_item,
+        no_item,
+        no_item,
+        sorting,
+        startup,
+        false,
+        slot0
+      )
+      ||
+      Arm(
+        home_position,
+        false,
+        false,
+        component_active
+      )
+      ||
+      Conveyor(
+        true,
+        component_active
+      )
+    )
+  );

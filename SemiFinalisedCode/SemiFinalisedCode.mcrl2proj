@@ -1,0 +1,13 @@
+<root>
+ <spec>SemiFinalisedCode_spec.mcrl2</spec>
+ <properties>
+  <property>deadlockcheck</property>
+  <property>R3 onlyResetAvailableAfterEBPress</property>
+  <property>R3 EBAvailableAtEveryState</property>
+  <property>R4 OnlyStopAllowedAfterITemDetect</property>
+  <property>testingrandomshit1</property>
+ </properties>
+ <jittyc>false</jittyc>
+ <linearisation_method>regular</linearisation_method>
+ <enumeration_limit>0</enumeration_limit>
+</root>
