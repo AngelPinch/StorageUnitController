@@ -1,0 +1,11 @@
+% Req 9: Selective Retrieval Sequence Integrity (req9_2_retrieval.mcf)
+% Verifies that once a retrieval pick starts at a chosen slot s1, 
+% another pick cannot occur at a different slot s2 without completing the release first.
+
+forall s1, s2: Slot . 
+  val(s1 != s2) => 
+    [ true* . 
+      arm_cmd_move(pick_at(slot_position(s1))) . 
+      (!arm_cmd_move(release_cmd) && !reset)* . 
+      arm_cmd_move(pick_at(slot_position(s2))) 
+    ] false

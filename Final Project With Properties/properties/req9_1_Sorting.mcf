@@ -1,0 +1,10 @@
+% Req 9: Consecutive Pickup Prohibition (req9.mcf)
+% Verifies that while holding an item, the arm cannot execute a second pick action
+% unless a place_at or reset action intervenes.
+
+forall s1, s2: Slot . 
+  [ true* . 
+    arm_cmd_move(pick_at(pickup_position)) . 
+    (!exists s: Slot . arm_cmd_move(place_at(slot_position(s))) )* . 
+    arm_cmd_move(pick_at(slot_position(s1))) 
+  ] false
