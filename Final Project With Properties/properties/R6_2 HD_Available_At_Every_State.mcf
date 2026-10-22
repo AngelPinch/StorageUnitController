@@ -1,0 +1,2 @@
+[true* . (!human_detected && !emergency_button && !arm_cmd_move(calibrate_cmd))]
+<human_detected>true
