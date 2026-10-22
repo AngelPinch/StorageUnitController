@@ -2,11 +2,16 @@
  <spec>Final Project With Properties_spec.mcrl2</spec>
  <properties>
   <property>Deadlock_Check</property>
-  <property>R3 Only_Reset_Available_After_EB_Press</property>
-  <property>R3 EB_Available_At_Every_State</property>
+  <property>R3_1 Only_Reset_Available_After_EB_Press</property>
+  <property>R3_2 EB_Available_At_Every_State</property>
   <property>R4 After_Item_Arrives_Only_ER_CBStop_HD_Can_Happen</property>
   <property>R1 After_Pick_Place_Must_Happen_Before_New_Pick</property>
   <property>R5 Pick_Can_Only_Happen_If_Place_Has_Happened</property>
+  <property>R6_1 After_HD_Only_HC_And_EB_Are_Available</property>
+  <property>R8 Switch_Mode_From_Sorting_To_Retrieval</property>
+  <property>R8 Switch_Mode_From_Retrieval_To_Sorting</property>
+  <property>R10_1 Calibration_Available_At_Start_State</property>
+  <property>R10_2 Calibration_Available_During_Operation</property>
  </properties>
  <jittyc>false</jittyc>
  <linearisation_method>regular</linearisation_method>

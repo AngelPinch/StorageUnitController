@@ -1,0 +1,2 @@
+[true* . human_detected]
+([!(human_cleared || emergency_button)] false)

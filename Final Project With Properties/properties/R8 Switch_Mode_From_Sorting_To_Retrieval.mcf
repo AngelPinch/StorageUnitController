@@ -1,0 +1,8 @@
+[true* .
+  arm_cmd_move(pick_at(pos(-2,0,0))) .
+  (!(
+    arm_cmd_move(place_at(pos(-1,0,0))) ||
+    arm_cmd_move(place_at(pos(1,0,0))) ||
+    arm_cmd_move(place_at(pos(0,0,0)))
+  ))* .
+  switch_mode(retrieval)] false

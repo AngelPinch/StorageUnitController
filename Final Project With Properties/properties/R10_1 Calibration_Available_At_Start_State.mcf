@@ -1,0 +1,3 @@
+[!(arm_cmd_move(calibrate_cmd) ||
+  emergency_button ||
+  human_detected)] false
